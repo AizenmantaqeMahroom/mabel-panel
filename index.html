@@ -87,7 +87,6 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // قفل کردن پنل برای سایر کاربران
         const user = tg.initDataUnsafe?.user;
         if (user && user.id !== OWNER_ID) {
             document.getElementById('main-panel').style.display = 'none';
@@ -108,14 +107,17 @@
         }
 
         async function loadChats() {
+            const container = document.getElementById('chat-list-view');
             try {
                 const res = await fetch(`${BOT_API_URL}/api/chats`);
+                if (!res.ok) {
+                    throw new Error(`خطای سرور: ${res.status}`);
+                }
                 const data = await res.json();
-                const container = document.getElementById('chat-list-view');
                 container.innerHTML = '';
 
                 if (!data.chats || data.chats.length === 0) {
-                    container.innerHTML = '<div style="text-align:center; padding:30px; color:gray;">چتی ثبت نشده است. پیامی بفرستید تا ظاهر شود.</div>';
+                    container.innerHTML = '<div style="text-align:center; padding:30px; color:gray;">چتی ثبت نشده است. پیامی در تلگرام بفرستید تا اینجا ظاهر شود.</div>';
                     return;
                 }
 
@@ -135,6 +137,7 @@
                 });
             } catch (e) {
                 console.error("خطا در دریافت لیست چت‌ها", e);
+                container.innerHTML = `<div style="text-align:center; padding:30px; color:#ff5252;">خطا در اتصال به سرور!<br><small>${e.message}</small></div>`;
             }
         }
 
