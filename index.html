@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>پنل مدیریت میبل</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: Tahoma, sans-serif; background-color: #18222d; color: #fff; margin: 0; padding: 10px; }
+        .header { text-align: center; padding: 10px; font-weight: bold; border-bottom: 1px solid #2b5278; }
+        .controls { margin-top: 15px; display: flex; flex-direction: column; gap: 10px; }
+        input, button { padding: 12px; border-radius: 8px; border: none; font-size: 14px; }
+        input { background: #242f3d; color: #fff; }
+        button { background: #2ea6ff; color: #fff; font-weight: bold; cursor: pointer; }
+        .unauthorized { display: none; color: #ff5252; text-align: center; margin-top: 50px; }
+    </style>
+</head>
+<body>
+
+    <div id="app" style="display: none;">
+        <div class="header">داشبورد مدیریت میبل</div>
+        <div class="controls">
+            <input type="text" id="targetChatId" placeholder="شناسه عددی گروه یا چت (Chat ID)">
+            <input type="text" id="messageText" placeholder="متنی که می‌خواهید میبل بفرستد...">
+            <button onclick="sendMessage()">ارسال پیام مستقیم</button>
+        </div>
+    </div>
+
+    <div id="unauthorized" class="unauthorized">
+        <h3>دسترسی غیرمجاز</h3>
+        <p>این پنل فقط برای سازنده میبل تعریف شده است.</p>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const OWNER_ID = 8857742735;
+        const user = tg.initDataUnsafe?.user;
+
+        if (user && user.id === OWNER_ID) {
+            document.getElementById('app').style.display = 'block';
+        } else {
+            document.getElementById('unauthorized').style.display = 'block';
+        }
+
+        function sendMessage() {
+            const chatId = document.getElementById('targetChatId').value;
+            const text = document.getElementById('messageText').value;
+
+            if (!chatId || !text) {
+                alert('لطفاً آیدی چت و متن را وارد کنید');
+                return;
+            }
+
+            tg.sendData(JSON.stringify({
+                action: "send_manual",
+                chat_id: chatId,
+                text: text
+            }));
+
+            document.getElementById('messageText').value = '';
+            alert('دستور ارسال شد!');
+        }
+    </script>
+</body>
+</html>
