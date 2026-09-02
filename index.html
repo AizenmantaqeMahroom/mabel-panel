@@ -43,10 +43,6 @@
         .input-bar { background: var(--tg-surface); padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
         .input-bar input { flex: 1; background: var(--tg-bg); border: none; padding: 10px 14px; border-radius: 20px; color: white; outline: none; }
         .send-btn { background: none; border: none; color: #64b5ef; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .sticker-btn { background: none; border: none; font-size: 20px; cursor: pointer; }
-
-        .sticker-drawer { display: none; background: var(--tg-surface); padding: 10px; height: 150px; overflow-y: auto; grid-template-columns: repeat(4, 1fr); gap: 10px; border-top: 1px solid rgba(0,0,0,0.2); }
-        .sticker-item { text-align: center; font-size: 30px; cursor: pointer; }
 
         #access-denied { display: none; text-align: center; padding: 50px 20px; color: #ff5252; font-weight: bold; font-size: 18px; }
     </style>
@@ -66,16 +62,8 @@
 
         <div id="chat-room-view">
             <div class="messages-container" id="messages-container"></div>
-            
-            <div class="sticker-drawer" id="sticker-drawer">
-                <div class="sticker-item" onclick="sendSticker('CAACAgIAAxkBAA...')">🌸</div>
-                <div class="sticker-item" onclick="sendSticker('CAACAgIAAxkBAA...')">✨</div>
-                <div class="sticker-item" onclick="sendSticker('CAACAgIAAxkBAA...')">❤️</div>
-                <div class="sticker-item" onclick="sendSticker('CAACAgIAAxkBAA...')">🔥</div>
-            </div>
 
             <div class="input-bar">
-                <button class="sticker-btn" onclick="toggleStickers()">😊</button>
                 <input type="text" id="msg-input" placeholder="پیام خود را بنویسید...">
                 <button class="send-btn" onclick="sendTextMessage()">ارسال</button>
             </div>
@@ -83,10 +71,16 @@
     </div>
 
     <script>
+        // ۱. پیکربندی آدرس‌ها و آیدی‌ها (در بالاترین قسمت)
         const OWNER_ID = 8857742735;
+        // آدرس دامنه دقیق وب‌سرویس Render (بدون اسلش / در انتها)
+        const BOT_API_URL = "https://my-bot-teto.onrender.com"; 
+
+        let activeChatId = null;
         const tg = window.Telegram.WebApp;
         tg.expand();
 
+        // ۲. احراز هویت کاربر
         const user = tg.initDataUnsafe?.user;
         if (user && user.id !== OWNER_ID) {
             document.getElementById('main-panel').style.display = 'none';
@@ -95,9 +89,7 @@
             initApp();
         }
 
-        const BOT_API_URL = "https://mabel-e0s4.onrender.com"; 
-        let activeChatId = null;
-
+        // ۳. توابع اصلی برنامه
         function initApp() {
             loadChats();
             setInterval(() => {
@@ -126,9 +118,9 @@
                     item.className = 'chat-item';
                     item.onclick = () => openChat(chat.id, chat.title);
                     item.innerHTML = `
-                        <div class="avatar">${chat.title.charAt(0)}</div>
+                        <div class="avatar">${chat.title ? chat.title.charAt(0) : '?'}</div>
                         <div class="chat-info">
-                            <div class="chat-title">${chat.title}</div>
+                            <div class="chat-title">${chat.title || 'چت بدون نام'}</div>
                             <div class="chat-last-msg">${chat.last_message || 'بدون پیام'}</div>
                         </div>
                         <div class="chat-meta">${chat.time || ''}</div>
@@ -167,16 +159,18 @@
                 const container = document.getElementById('messages-container');
                 container.innerHTML = '';
 
-                data.messages.forEach(msg => {
-                    const bubble = document.createElement('div');
-                    bubble.className = `msg-bubble ${msg.is_me ? 'msg-out' : 'msg-in'}`;
-                    bubble.innerHTML = `
-                        ${!msg.is_me ? `<div class="msg-sender">${msg.sender}</div>` : ''}
-                        <div>${msg.text}</div>
-                        <div class="msg-time">${msg.date}</div>
-                    `;
-                    container.appendChild(bubble);
-                });
+                if (data.messages) {
+                    data.messages.forEach(msg => {
+                        const bubble = document.createElement('div');
+                        bubble.className = `msg-bubble ${msg.is_me ? 'msg-out' : 'msg-in'}`;
+                        bubble.innerHTML = `
+                            ${!msg.is_me ? `<div class="msg-sender">${msg.sender}</div>` : ''}
+                            <div>${msg.text}</div>
+                            <div class="msg-time">${msg.date}</div>
+                        `;
+                        container.appendChild(bubble);
+                    });
+                }
                 container.scrollTop = container.scrollHeight;
             } catch (e) {
                 console.error("خطا در دریافت پیام‌ها", e);
@@ -195,22 +189,6 @@
                 body: JSON.stringify({ chat_id: activeChatId, text: text })
             });
             loadMessages();
-        }
-
-        async function sendSticker(stickerId) {
-            if (!activeChatId) return;
-            await fetch(`${BOT_API_URL}/api/send`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: activeChatId, sticker_id: stickerId })
-            });
-            toggleStickers();
-            loadMessages();
-        }
-
-        function toggleStickers() {
-            const drawer = document.getElementById('sticker-drawer');
-            drawer.style.display = drawer.style.display === 'grid' ? 'none' : 'grid';
         }
     </script>
 </body>
