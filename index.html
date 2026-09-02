@@ -34,15 +34,30 @@
 
         #chat-room-view { display: none; flex-direction: column; height: calc(100vh - 50px); }
         .messages-container { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-        .msg-bubble { max-width: 75%; padding: 8px 12px; border-radius: 12px; font-size: 14px; position: relative; word-wrap: break-word; }
+        .msg-bubble { max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 14px; position: relative; word-wrap: break-word; cursor: pointer; }
         .msg-in { background: var(--tg-bubble-in); align-self: flex-start; border-bottom-right-radius: 2px; }
         .msg-out { background: var(--tg-bubble-out); align-self: flex-end; border-bottom-left-radius: 2px; }
         .msg-sender { font-size: 11px; color: #64b5ef; margin-bottom: 2px; font-weight: bold; }
-        .msg-time { font-size: 10px; color: var(--tg-hint); text-align: left; margin-top: 4px; }
+        .msg-reply-box { background: rgba(0,0,0,0.2); border-right: 3px solid #64b5ef; padding: 4px 8px; font-size: 11px; margin-bottom: 4px; border-radius: 4px; color: #a2c4e0; }
+        .msg-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+        .msg-reaction { font-size: 12px; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 10px; }
+        .msg-time { font-size: 10px; color: var(--tg-hint); }
+
+        .reply-preview-bar { background: #131e29; padding: 6px 12px; display: none; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.05); font-size: 12px; color: #64b5ef; }
+        .reply-preview-bar button { background: none; border: none; color: #ff5252; font-size: 14px; cursor: pointer; }
 
         .input-bar { background: var(--tg-surface); padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
         .input-bar input { flex: 1; background: var(--tg-bg); border: none; padding: 10px 14px; border-radius: 20px; color: white; outline: none; }
         .send-btn { background: none; border: none; color: #64b5ef; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .icon-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--tg-hint); }
+
+        .sticker-drawer { display: none; background: var(--tg-surface); padding: 10px; height: 160px; overflow-y: auto; border-top: 1px solid rgba(0,0,0,0.2); }
+        .sticker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .sticker-item { text-align: center; font-size: 28px; cursor: pointer; padding: 5px; }
+
+        .action-menu { display: none; position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: #212d3b; border-radius: 12px; padding: 8px; gap: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 100; }
+        .action-menu button { background: none; border: none; font-size: 20px; cursor: pointer; }
+        .action-menu .reply-act { font-size: 13px; color: #64b5ef; padding: 4px 8px; background: rgba(255,255,255,0.05); border-radius: 6px; }
 
         #access-denied { display: none; text-align: center; padding: 50px 20px; color: #ff5252; font-weight: bold; font-size: 18px; }
     </style>
@@ -61,26 +76,47 @@
         <div id="chat-list-view"></div>
 
         <div id="chat-room-view">
-            <div class="messages-container" id="messages-container"></div>
+            <div class="messages-container" id="messages-container" onclick="closeActionMenu()"></div>
+
+            <div id="reply-preview-bar" class="reply-preview-bar">
+                <span id="reply-preview-text">در حال پاسخ به پیام...</span>
+                <button onclick="cancelReply()">✕</button>
+            </div>
+
+            <div class="sticker-drawer" id="sticker-drawer">
+                <div class="sticker-grid" id="sticker-grid"></div>
+            </div>
 
             <div class="input-bar">
+                <button class="icon-btn" onclick="toggleStickers()">😊</button>
                 <input type="text" id="msg-input" placeholder="پیام خود را بنویسید...">
                 <button class="send-btn" onclick="sendTextMessage()">ارسال</button>
             </div>
         </div>
     </div>
 
+    <!-- منوی واکنش و ریپلای -->
+    <div id="action-menu" class="action-menu">
+        <button onclick="reactToMessage('❤️')">❤️</button>
+        <button onclick="reactToMessage('👍')">👍</button>
+        <button onclick="reactToMessage('🔥')">🔥</button>
+        <button onclick="reactToMessage('😂')">😂</button>
+        <button class="reply-act" onclick="initiateReply()">پاسخ (Reply)</button>
+    </div>
+
     <script>
-        // ۱. پیکربندی آدرس‌ها و آیدی‌ها (در بالاترین قسمت)
         const OWNER_ID = 8857742735;
-        // آدرس دامنه دقیق وب‌سرویس Render (بدون اسلش / در انتها)
         const BOT_API_URL = "https://my-bot-teto.onrender.com"; 
 
         let activeChatId = null;
+        let selectedMessageId = null;
+        let selectedMessageText = null;
+        let replyingToMsgId = null;
+        let availableStickers = [];
+
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // ۲. احراز هویت کاربر
         const user = tg.initDataUnsafe?.user;
         if (user && user.id !== OWNER_ID) {
             document.getElementById('main-panel').style.display = 'none';
@@ -89,11 +125,10 @@
             initApp();
         }
 
-        // ۳. توابع اصلی برنامه
         function initApp() {
             loadChats();
             setInterval(() => {
-                if (activeChatId) loadMessages();
+                if (activeChatId) loadMessages(false);
                 else loadChats();
             }, 3000);
         }
@@ -102,9 +137,7 @@
             const container = document.getElementById('chat-list-view');
             try {
                 const res = await fetch(`${BOT_API_URL}/api/chats`);
-                if (!res.ok) {
-                    throw new Error(`خطای سرور: ${res.status}`);
-                }
+                if (!res.ok) throw new Error(`خطای سرور: ${res.status}`);
                 const data = await res.json();
                 container.innerHTML = '';
 
@@ -128,7 +161,6 @@
                     container.appendChild(item);
                 });
             } catch (e) {
-                console.error("خطا در دریافت لیست چت‌ها", e);
                 container.innerHTML = `<div style="text-align:center; padding:30px; color:#ff5252;">خطا در اتصال به سرور!<br><small>${e.message}</small></div>`;
             }
         }
@@ -139,11 +171,12 @@
             document.getElementById('chat-room-view').style.display = 'flex';
             document.getElementById('back-btn').style.display = 'block';
             document.getElementById('header-title').innerText = title;
-            loadMessages();
+            loadMessages(true);
         }
 
         function showChatList() {
             activeChatId = null;
+            cancelReply();
             document.getElementById('chat-list-view').style.display = 'block';
             document.getElementById('chat-room-view').style.display = 'none';
             document.getElementById('back-btn').style.display = 'none';
@@ -151,11 +184,17 @@
             loadChats();
         }
 
-        async function loadMessages() {
+        async function loadMessages(shouldScroll = false) {
             if (!activeChatId) return;
             try {
                 const res = await fetch(`${BOT_API_URL}/api/messages?chat_id=${activeChatId}`);
                 const data = await res.json();
+                
+                if (data.stickers) {
+                    availableStickers = data.stickers;
+                    renderStickers();
+                }
+
                 const container = document.getElementById('messages-container');
                 container.innerHTML = '';
 
@@ -163,15 +202,26 @@
                     data.messages.forEach(msg => {
                         const bubble = document.createElement('div');
                         bubble.className = `msg-bubble ${msg.is_me ? 'msg-out' : 'msg-in'}`;
+                        bubble.onclick = (e) => {
+                            e.stopPropagation();
+                            openActionMenu(msg.id, msg.text);
+                        };
+
                         bubble.innerHTML = `
                             ${!msg.is_me ? `<div class="msg-sender">${msg.sender}</div>` : ''}
+                            ${msg.reply_to ? `<div class="msg-reply-box">پاسخ به: ${msg.reply_to}</div>` : ''}
                             <div>${msg.text}</div>
-                            <div class="msg-time">${msg.date}</div>
+                            <div class="msg-footer">
+                                ${msg.reaction ? `<span class="msg-reaction">${msg.reaction}</span>` : '<span></span>'}
+                                <span class="msg-time">${msg.date}</span>
+                            </div>
                         `;
                         container.appendChild(bubble);
                     });
                 }
-                container.scrollTop = container.scrollHeight;
+                if (shouldScroll) {
+                    container.scrollTop = container.scrollHeight;
+                }
             } catch (e) {
                 console.error("خطا در دریافت پیام‌ها", e);
             }
@@ -183,12 +233,101 @@
             if (!text || !activeChatId) return;
 
             input.value = '';
+            
+            const payload = { 
+                chat_id: activeChatId, 
+                text: text,
+                reply_to_msg_id: replyingToMsgId
+            };
+
+            cancelReply();
+
+            const res = await fetch(`${BOT_API_URL}/api/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                loadMessages(true);
+            }
+        }
+
+        function openActionMenu(msgId, text) {
+            selectedMessageId = msgId;
+            selectedMessageText = text;
+            const menu = document.getElementById('action-menu');
+            menu.style.display = 'flex';
+        }
+
+        function closeActionMenu() {
+            document.getElementById('action-menu').style.display = 'none';
+        }
+
+        function initiateReply() {
+            replyingToMsgId = selectedMessageId;
+            document.getElementById('reply-preview-text').innerText = `پاسخ به: ${selectedMessageText}`;
+            document.getElementById('reply-preview-bar').style.display = 'flex';
+            closeActionMenu();
+        }
+
+        function cancelReply() {
+            replyingToMsgId = null;
+            document.getElementById('reply-preview-bar').style.display = 'none';
+        }
+
+        async function reactToMessage(emoji) {
+            if (!selectedMessageId || !activeChatId) return;
+            closeActionMenu();
+
+            await fetch(`${BOT_API_URL}/api/react`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: activeChatId,
+                    message_id: selectedMessageId,
+                    emoji: emoji
+                })
+            });
+            loadMessages(false);
+        }
+
+        function renderStickers() {
+            const grid = document.getElementById('sticker-grid');
+            if (grid.children.length > 0) return;
+
+            const defaultEmojis = ['🌸', '✨', '❤️', '🔥', '👑', '🎉', '👍', '😊'];
+            grid.innerHTML = '';
+            
+            availableStickers.forEach((stkId, index) => {
+                const item = document.createElement('div');
+                item.className = 'sticker-item';
+                item.innerText = defaultEmojis[index % defaultEmojis.length];
+                item.onclick = () => sendSticker(stkId);
+                grid.appendChild(item);
+            });
+        }
+
+        async function sendSticker(stickerId) {
+            if (!activeChatId) return;
+            toggleStickers();
+
             await fetch(`${BOT_API_URL}/api/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: activeChatId, text: text })
+                body: JSON.stringify({
+                    chat_id: activeChatId,
+                    sticker_id: stickerId,
+                    reply_to_msg_id: replyingToMsgId
+                })
             });
-            loadMessages();
+            cancelReply();
+            loadMessages(true);
+        }
+
+        function toggleStickers() {
+            const drawer = document.getElementById('sticker-drawer');
+            drawer.style.display = drawer.style.display === 'block' ? 'none' : 'block';
         }
     </script>
 </body>
